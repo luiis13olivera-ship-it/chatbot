@@ -1,7 +1,6 @@
 streamlit
 psycopg2-binary
-fuzzywuzzy
-nltk
 python-dotenv
+fuzzywuzzy
 python-Levenshtein
-
+nltk
