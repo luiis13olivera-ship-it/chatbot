@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import os
 import psycopg2
 import nltk
@@ -17,6 +17,7 @@ try:
     nltk.data.find('corpora/stopwords')
     nltk.data.find('tokenizers/punkt_tab')
 except LookupError:
+    print("Descargando recursos de NLTK...")
     nltk.download('punkt')
     nltk.download('stopwords')
     nltk.download('punkt_tab')
@@ -64,6 +65,7 @@ def registrar_pregunta_fallida(pregunta):
             cursor.close()
         if 'conn' in locals():
             conn.close()
+
 # --- 💡 MEJORA DE BACKEND (Carga de Modelo y Vectores) ---
 @st.cache_resource
 def cargar_conocimiento_y_modelo():
@@ -86,7 +88,7 @@ def cargar_conocimiento_y_modelo():
         
         if not DB_URL:
             st.error("Error: No se pudo encontrar la variable DATABASE_URL.")
-            return None, None
+            return None, None, None
 
         conn = psycopg2.connect(DB_URL)
         cursor = conn.cursor()
@@ -120,6 +122,35 @@ def cargar_conocimiento_y_modelo():
         st.error(f"Error de conexión o carga de modelo: {e}")
         return None, None, None
 
+# --- 💡 LÓGICA DE RESPUESTA (Semántica + Palabras Clave) ---
+def responder(pregunta_usuario, model, faq_data, question_vectors):
+    texto_filtrado = limpiar_texto(pregunta_usuario)
+
+    if not texto_filtrado:
+        return "Disculpa, no detecté ninguna palabra clave."
+
+    # 1️⃣ Búsqueda por palabra clave (rápida, para coincidencias exactas)
+    for item in faq_data:
+        for palabra in item['palabras_clave']:
+            if palabra in texto_filtrado:
+                return item['respuesta']
+
+    # 2️⃣ Búsqueda por ML (Similitud Semántica)
+    if model:
+        user_vector = model.encode([texto_filtrado])
+        similarities = cosine_similarity(user_vector, question_vectors)
+        best_match_index = np.argmax(similarities)
+        best_score = similarities[0][best_match_index]
+        
+        # 3️⃣ Devolución con umbral
+        if best_score >= 0.65: 
+            return faq_data[best_match_index]['respuesta']
+        else:
+            # Si la IA no está segura, registra la pregunta
+            registrar_pregunta_fallida(pregunta_usuario)
+            return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
+    else:
+        return "Error: El modelo de IA no está cargado."
 
 # --- INTERFAZ GRÁFICA MEJORADA ---
 
@@ -269,6 +300,14 @@ with col2:
             unsafe_allow_html=True
         )
 
+# Cargar modelo y datos (se hace aquí para verificar el estado)
+with st.spinner("Conectando con el asistente..."):
+    model, faq_data, question_vectors = cargar_conocimiento_y_modelo()
+
+if not faq_data or model is None:
+    st.error("❌ Lo siento, hay un problema técnico. No pude cargar mi base de conocimiento. Por favor, intenta más tarde.")
+    st.stop() # Detiene la ejecución si el bot no puede cargar
+
 # Preguntas sugeridas mejoradas
 st.markdown("### 💡 ¿En qué puedo ayudarte?")
 suggested_questions = [
@@ -280,78 +319,55 @@ suggested_questions = [
     "¿Dónde están ubicados?"
 ]
 
-# Crear chips de sugerencias
-suggestions_html = '<div style="display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0;">'
+# Crear botones de sugerencias en columnas
+columns = st.columns(3)
 for i, question in enumerate(suggested_questions):
-    suggestions_html += f'''
-    <div class="suggestion-chip" onclick="document.getElementById('suggestion-{i}').click()">
-        {question}
-    </div>
-    '''
-suggestions_html += '</div>'
-st.markdown(suggestions_html, unsafe_allow_html=True)
-
-# Botones ocultos para las sugerencias
-for i, question in enumerate(suggested_questions):
-    if st.button(question, key=f"sugg_{i}", help=f"Hacer esta pregunta: {question}"):
+    col = columns[i % 3]
+    if col.button(question, key=f"sugg_{i}"):
         st.session_state.suggested_question = question
+        # Forzamos un rerun para que la pregunta aparezca en el input
+        st.rerun()
+
+st.markdown("---") # Separador (Esta es la línea 242)
 
 # Contenedor del chat mejorado
 st.markdown("### 💬 Conversación")
-st.markdown('<div class="chat-container" id="chat-container">', unsafe_allow_html=True)
 
-# Mostrar historial de mensajes con mejor formato
-for message in st.session_state.messages:
-    if message["role"] == "user":
-        st.markdown(f'<div class="user-message">👤 *Tú:* {message["content"]}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="bot-message">🤖 *Asistente:* {message["content"]}</div>', unsafe_allow_html=True)
+# --- Lógica de Chat Principal ---
 
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Input de chat mejorado
+# Manejar si se hizo clic en una sugerencia
+prompt = None
 if "suggested_question" in st.session_state:
-    prompt = st.chat_input("Escribe tu consulta aquí...", value=st.session_state.suggested_question)
-    del st.session_state.suggested_question
+    prompt = st.session_state.suggested_question
+    del st.session_state.suggested_question # Limpiar para que no se repita
+# (Esta es la línea 251)
 else:
     prompt = st.chat_input("Escribe tu consulta aquí...")
 
-# Procesar mensaje
+# --- LÓGICA DE CHAT CORREGIDA ---
+# 1. Procesar nuevo mensaje (de input o sugerencia) ANTES de mostrar el chat
 if prompt:
-    # Mostrar mensaje del usuario inmediatamente
-    st.markdown(f'<div class="user-message">👤 *Tú:* {prompt}</div>', unsafe_allow_html=True)
+    # Añadir mensaje del usuario al historial
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Mostrar indicador de typing con mejor diseño
+    # Obtener respuesta del bot
     with st.spinner("🤖 *El bot está procesando tu consulta...*"):
-        # Cargar modelo y datos
-        model, faq_data, question_vectors = cargar_conocimiento_y_modelo()
-        
-        # Obtener respuesta
-        if not faq_data or model is None:
-            response = "❌ *Lo siento, hay un problema técnico.* No pude cargar mi base de conocimiento. Por favor, intenta más tarde."
-        else:
-            response = responder(prompt, model, faq_data, question_vectors)
-
-    # Mostrar respuesta del bot
-    st.markdown(f'<div class="bot-message">🤖 *Asistente:* {response}</div>', unsafe_allow_html=True)
+        response = responder(prompt, model, faq_data, question_vectors)
+    
+    # Añadir respuesta del bot al historial
     st.session_state.messages.append({"role": "assistant", "content": response})
 
-    # Auto-scroll con JavaScript
-    st.markdown("""
-    <script>
-        function scrollToBottom() {
-            const chatContainer = document.getElementById('chat-container');
-            if (chatContainer) {
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
-        }
-        setTimeout(scrollToBottom, 100);
-    </script>
-    """, unsafe_allow_html=True)
+# 2. Mostrar el historial de chat COMPLETO (incluyendo los mensajes nuevos)
+chat_container = st.container()
+with chat_container:
+    # Mostrar historial de mensajes con mejor formato
+    for message in st.session_state.messages:
+        if message["role"] == "user":
+            st.markdown(f'<div class="user-message">👤 *Tú:* {message["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="bot-message">🤖 *Asistente:* {message["content"]}</div>', unsafe_allow_html=True)
 
-    # Recargar la página para actualizar la visualización
-    st.rerun()
+# 3. (Se elimina el st.rerun() que estaba aquí)
 
 # Footer mejorado
 st.markdown("---")
