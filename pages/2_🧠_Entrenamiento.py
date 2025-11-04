@@ -21,7 +21,7 @@ with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_resp
     -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW();
     """, language="sql")
 
-# --- Funciones de a página ---
+# --- Funciones a a página ---
 
 def cargar_preguntas_pendientes():
     """Obtiene todas las preguntas de la tabla 'preguntas_sin_respuesta'."""
