@@ -7,20 +7,6 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
-# --- 💡 Consejo Importante sobre tu BD ---
-with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_respuesta' tenga un ID"):
-    st.code("""
-    -- Si aún no tienes la tabla, usa esto:
-    CREATE TABLE IF NOT EXISTS preguntas_sin_respuesta (
-        id SERIAL PRIMARY KEY,
-        pregunta_usuario TEXT NOT NULL,
-        fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    );
-
-    -- Si ya la tenías pero sin 'id', ejecuta esto UNA VEZ:
-    -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN id SERIAL PRIMARY KEY;
-    -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW();
-    """, language="sql")
 
 # --- Funciones de esta página ---
 
