@@ -7,6 +7,58 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
+# --- 💡 Consejo Importante sobre tu BD ---
+with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_respuesta' tenga un ID"):
+    st.code("""
+    -- Si aún no tienes la tabla, usa esto:
+    CREATE TABLE IF NOT EXISTS preguntas_sin_respuesta (
+        id SERIAL PRIMARY KEY,
+        pregunta_usuario TEXT NOT NULL,
+        fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Si ya la tenías pero sin 'id', ejecuta esto UNA VEZ:
+    -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN id SERIAL PRIMARY KEY;
+    -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    """, language="sql")
+
+# --- 💡 Consejo 2: Tu tabla 'chatbot_conocimiento' ---
+with st.expander("🔑 ¡IMPORTANTE! Revisa tu tabla 'chatbot_conocimiento' (¡Este parece ser tu error!)"):
+    st.code("""
+    -- El error 'null value in column "id"' significa que 
+    -- 'chatbot_conocimiento' TAMBIÉN necesita un ID auto-incremental.
+    
+    -- Si aún no la tienes, usa esto:
+    CREATE TABLE IF NOT EXISTS chatbot_conocimiento (
+        id SERIAL PRIMARY KEY,
+        pregunta TEXT,
+        respuesta TEXT,
+        palabras_clave TEXT
+    );
+    
+    -- Si ya la tenías pero 'id' no es SERIAL, 
+    -- tendrás que arreglarla. La forma más fácil es crear una nueva:
+    
+    -- 1. RENOMBRA LA VIEJA:
+    -- ALTER TABLE chatbot_conocimiento RENAME TO chatbot_conocimiento_vieja;
+    
+    -- 2. CREA LA NUEVA (CON SERIAL):
+    -- CREATE TABLE chatbot_conocimiento (
+    --     id SERIAL PRIMARY KEY,
+    --     pregunta TEXT,
+    --     respuesta TEXT,
+    --     palabras_clave TEXT
+    -- );
+    
+    -- 3. COPIA TUS DATOS (sin el id nulo):
+    -- INSERT INTO chatbot_conocimiento (pregunta, respuesta, palabras_clave)
+    -- SELECT pregunta, respuesta, palabras_clave FROM chatbot_conocimiento_vieja;
+    
+    -- 4. (Opcional) Borra la vieja
+    -- DROP TABLE chatbot_conocimiento_vieja;
+    
+    """, language="sql")
+
 # --- Funciones de esta página ---
 
 def cargar_preguntas_pendientes():
@@ -45,7 +97,13 @@ def agregar_a_conocimiento(pregunta, respuesta, palabras_clave):
             conn.commit()
         return True
     except Exception as e:
-        st.error(f"Error al guardar en conocimiento: {e}")
+        # --- 💡 MEJORA: Detectar el error de 'id' nulo ---
+        if "violates not-null constraint" in str(e) and "\"id\"" in str(e):
+            st.error(f"Error al guardar: La columna 'id' en tu tabla 'chatbot_conocimiento' no puede ser nula.")
+            st.warning("Esto usualmente significa que la columna 'id' no está configurada como 'SERIAL PRIMARY KEY'.")
+            st.info("Por favor, revisa el consejo '¡IMPORTANTE! Revisa tu tabla chatbot_conocimiento' aquí arriba para ver cómo solucionarlo.")
+        else:
+            st.error(f"Error al guardar en conocimiento: {e}")
         return False
     finally:
         if conn: conn.close()
@@ -179,3 +237,5 @@ else:
                 st.rerun()
             else:
                 st.error("No se pudo descartar la pregunta.")
+
+
