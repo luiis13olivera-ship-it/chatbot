@@ -7,7 +7,7 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
-# --- Funciones de esta página ---
+# --- Funciones de a página ---
 
 def cargar_preguntas_pendientes():
     """Obtiene todas las preguntas de la tabla 'preguntas_sin_respuesta'."""
