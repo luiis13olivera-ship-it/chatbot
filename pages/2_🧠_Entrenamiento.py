@@ -7,6 +7,21 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
+# --- 💡 Consejo Importante sobre tu BD ---
+with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_respuesta' tenga un ID"):
+    st.code("""
+    -- Si aún no tienes la tabla, usa esto:
+    CREATE TABLE IF NOT EXISTS preguntas_sin_respuesta (
+        id SERIAL PRIMARY KEY,
+        pregunta_usuario TEXT NOT NULL,
+        fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Si ya la tenías pero sin 'id', ejecuta esto UNA VEZ:
+    -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN id SERIAL PRIMARY KEY;
+    -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+    """, language="sql")
+
 # --- Funciones de esta página ---
 
 def cargar_preguntas_pendientes():
@@ -17,13 +32,13 @@ def cargar_preguntas_pendientes():
         return pd.DataFrame()
     try:
         # Usamos pandas para leer fácilmente la tabla
-        query = "SELECT id, pregunta_usuario, fecha_creacion FROM preguntas_sin_respuesta ORDER BY fecha_creacion DESC"
+        query = "SELECT id, pregunta_usuario, fecha_registro FROM preguntas_sin_respuesta ORDER BY fecha_registro DESC"
         df = pd.read_sql(query, conn)
         return df
     except Exception as e:
-        # Esto pasa si la tabla o columnas 'id', 'fecha_creacion' no existen
-        if "column \"id\" does not exist" in str(e) or "column \"fecha_creacion\" does not exist" in str(e):
-             st.error("Error: Tu tabla 'preguntas_sin_respuesta' no tiene las columnas 'id' o 'fecha_creacion'. Por favor, mira el consejo de arriba y actualiza tu base de datos.")
+        # Esto pasa si la tabla o columnas 'id', 'fecha_registro' no existen
+        if "column \"id\" does not exist" in str(e) or "column \"fecha_registro\" does not exist" in str(e):
+             st.error("Error: Tu tabla 'preguntas_sin_respuesta' no tiene las columnas 'id' o 'fecha_registro'. Por favor, mira el consejo de arriba y actualiza tu base de datos.")
              return pd.DataFrame()
         st.error(f"Error al cargar preguntas: {e}")
         return pd.DataFrame()
@@ -172,3 +187,4 @@ else:
             st.rerun()
         else:
             st.error("No se pudo descartar la pregunta.")
+
