@@ -34,7 +34,6 @@ def limpiar_texto(texto):
     return ' '.join(tokens_filtrados)
 
 # --- 2. Lógica de Conexión a BD ---
-@st.cache_resource
 def get_db_connection():
     """Establece y devuelve una conexión a la base de datos."""
     load_dotenv()
@@ -159,3 +158,4 @@ def responder(pregunta_usuario, model, faq_data, question_vectors):
             return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
     else:
         return "Error: El modelo de IA no está cargado."
+
