@@ -154,233 +154,62 @@ def responder(pregunta_usuario, model, faq_data, question_vectors):
 
 # --- INTERFAZ GRÁFICA MEJORADA ---
 
-# Configuración de la página
-st.set_page_config(
-    page_title="Chatbot Verese Sac",
-    page_icon="🤖",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+# 1. Cargar el modelo Y los datos
+model, faq_data, question_vectors = cargar_conocimiento_y_modelo()
 
-# CSS personalizado para mejorar la apariencia
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem !important;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 1rem;
-    }
-    .sub-header {
-        font-size: 1.1rem !important;
-        color: #666;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .chat-container {
-        background-color: #f8f9fa;
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
-        border: 1px solid #e9ecef;
-        max-height: 500px;
-        overflow-y: auto;
-    }
-    .user-message {
-        background: linear-gradient(135deg, #007bff, #0056b3);
-        color: white;
-        padding: 12px 16px;
-        border-radius: 18px 18px 0px 18px;
-        margin: 8px 0;
-        max-width: 80%;
-        margin-left: auto;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        animation: fadeIn 0.3s ease-in;
-    }
-    .bot-message {
-        background: linear-gradient(135deg, #e9ecef, #dee2e6);
-        color: #333;
-        padding: 12px 16px;
-        border-radius: 18px 18px 18px 0px;
-        margin: 8px 0;
-        max-width: 80%;
-        margin-right: auto;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        animation: fadeIn 0.3s ease-in;
-    }
-    .stChatInput {
-        border-radius: 25px !important;
-        border: 2px solid #e9ecef !important;
-        padding: 12px 20px !important;
-    }
-    .stChatInput:focus {
-        border-color: #007bff !important;
-        box-shadow: 0 0 0 2px rgba(0,123,255,0.25) !important;
-    }
-    .status-indicator {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 8px;
-        animation: pulse 2s infinite;
-    }
-    .online {
-        background-color: #28a745;
-    }
-    .offline {
-        background-color: #dc3545;
-    }
-    .suggestion-chip {
-        background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-        border: 1px solid #90caf9;
-        border-radius: 20px;
-        padding: 8px 16px;
-        font-size: 0.9rem;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin: 5px;
-        display: inline-block;
-    }
-    .suggestion-chip:hover {
-        background: linear-gradient(135deg, #bbdefb, #90caf9);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pulse {
-        0% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.1); opacity: 0.7; }
-        100% { transform: scale(1); opacity: 1; }
-    }
-    .welcome-banner {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# Header mejorado con banner de bienvenida
-st.markdown("""
-<div class="welcome-banner">
-    <h1 style="margin:0; font-size: 2.5rem;">🤖 Chatbot Verese Sac</h1>
-    <p style="margin:0; font-size: 1.2rem; opacity: 0.9;">v2.0 con IA • Tu asistente virtual inteligente</p>
-</div>
-""", unsafe_allow_html=True)
-
-# Barra de estado mejorada
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+# --- 🎨 MEJORA DE DISEÑO 2: BARRA LATERAL CON ESTATUS E INSTRUCCIONES ---
+with st.sidebar:
+    st.image("https://placehold.co/150x50/3498db/ffffff?text=VERESE+SAC", use_column_width=True)
+    st.markdown("---")
+    st.header("⚙️ Estado y Configuración")
     
-    # Indicador de estado dinámico
-    status_text = st.empty()
-    if len(st.session_state.messages) > 0:
-        status_text.markdown(
-            f'<div style="text-align: center; background: #f8f9fa; padding: 10px; border-radius: 10px; border-left: 4px solid #28a745;">'
-            f'<span class="status-indicator online"></span>'
-            f'<span style="color: #28a745; font-weight: bold;">En línea • {len(st.session_state.messages)} mensajes en la conversación</span>'
-            f'</div>',
-            unsafe_allow_html=True
-        )
+    if faq_data is not None and model is not None:
+         st.success(f"✅ Base de Conocimiento Activa ({len(faq_data)} temas)")
+         
+         st.markdown("---")
+         st.subheader("💡 Tips para Preguntar")
+         st.markdown("""
+         - *Sé específico* (ej: "¿Qué repuestos tienen para motor Toyota?").
+         - Pregunta por *servicios, horarios o ubicación*.
+         - Evita la jerga compleja.
+         """)
     else:
-        status_text.markdown(
-            '<div style="text-align: center; background: #f8f9fa; padding: 10px; border-radius: 10px; border-left: 4px solid #28a745;">'
-            '<span class="status-indicator online"></span>'
-            '<span style="color: #28a745; font-weight: bold;">En línea • Listo para ayudarte con tus consultas</span>'
-            '</div>',
-            unsafe_allow_html=True
-        )
+         st.error("⚠️ El bot no pudo cargar la base de conocimiento o el modelo. Por favor, verifica la variable DATABASE_URL.")
+    
+    st.markdown("---")
+    st.caption("Desarrollado para Verese Sac (v2.0 IA)")
 
-# Cargar modelo y datos (se hace aquí para verificar el estado)
-with st.spinner("Conectando con el asistente..."):
-    model, faq_data, question_vectors = cargar_conocimiento_y_modelo()
 
-if not faq_data or model is None:
-    st.error("❌ Lo siento, hay un problema técnico. No pude cargar mi base de conocimiento. Por favor, intenta más tarde.")
-    st.stop() # Detiene la ejecución si el bot no puede cargar
+# --- 🎨 MEJORA DE DISEÑO 3: TÍTULO PRINCIPAL CON ICONO ---
+st.title("🔩 Asistente Virtual Verese Sac 🤖")
+st.caption("Tu experto en repuestos: Consulta la disponibilidad, servicios y detalles de nuestros productos.")
 
-# Preguntas sugeridas mejoradas
-st.markdown("### 💡 ¿En qué puedo ayudarte?")
-suggested_questions = [
-    "¿Cuál es su horario de atención?",
-    "¿Qué métodos de pago aceptan?",
-    "¿Tienen repuestos para Toyota?",
-    "¿Realizan envíos a domicilio?",
-    "¿Ofrecen garantía en los repuestos?",
-    "¿Dónde están ubicados?"
-]
+# --- 🎨 MEJORA DE DISEÑO 4: MENSAJE DE BIENVENIDA INICIAL ---
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "assistant", "content": "¡Hola! Soy tu Asistente de Repuestos Verese Sac. ¿En qué puedo ayudarte hoy? Por ejemplo, puedes preguntarme por un repuesto o nuestros horarios."}
+    ]
 
-# Crear botones de sugerencias en columnas
-columns = st.columns(3)
-for i, question in enumerate(suggested_questions):
-    col = columns[i % 3]
-    if col.button(question, key=f"sugg_{i}"):
-        st.session_state.suggested_question = question
-        # Forzamos un rerun para que la pregunta aparezca en el input
-        st.rerun()
+# Mostrar el historial de mensajes
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-st.markdown("---") # Separador (Esta es la línea 242)
+# Manejar la entrada del usuario
+if prompt := st.chat_input("Escribe tu consulta aquí..."):
 
-# Contenedor del chat mejorado
-st.markdown("### 💬 Conversación")
-
-# --- Lógica de Chat Principal ---
-
-# Manejar si se hizo clic en una sugerencia
-prompt = None
-if "suggested_question" in st.session_state:
-    prompt = st.session_state.suggested_question
-    del st.session_state.suggested_question # Limpiar para que no se repita
-# (Esta es la línea 251)
-else:
-    prompt = st.chat_input("Escribe tu consulta aquí...")
-
-# --- LÓGICA DE CHAT CORREGIDA ---
-# 1. Procesar nuevo mensaje (de input o sugerencia) ANTES de mostrar el chat
-if prompt:
-    # Añadir mensaje del usuario al historial
+    # Mostrar la pregunta del usuario
+    with st.chat_message("user"):
+        st.markdown(prompt)
     st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # Obtener respuesta del bot
-    with st.spinner("🤖 *El bot está procesando tu consulta...*"):
+    # Generar la respuesta del bot
+    if not faq_data or model is None:
+        response = "Error: El bot no está operativo. Por favor, revisa la conexión a la base de datos."
+    else:
         response = responder(prompt, model, faq_data, question_vectors)
-    
-    # Añadir respuesta del bot al historial
+
+    # Mostrar la respuesta del asistente
+    with st.chat_message("assistant"):
+        st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
-
-# 2. Mostrar el historial de chat COMPLETO (incluyendo los mensajes nuevos)
-chat_container = st.container()
-with chat_container:
-    # Mostrar historial de mensajes con mejor formato
-    for message in st.session_state.messages:
-        if message["role"] == "user":
-            st.markdown(f'<div class="user-message">👤 *Tú:* {message["content"]}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="bot-message">🤖 *Asistente:* {message["content"]}</div>', unsafe_allow_html=True)
-
-# 3. (Se elimina el st.rerun() que estaba aquí)
-
-# Footer mejorado
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #666; font-size: 0.9rem;'>
-    <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 10px;">
-        <span>🔍 <strong>Búsqueda inteligente</strong></span>
-        <span>🤖 <strong>IA avanzada</strong></span>
-        <span>⚡ <strong>Respuestas rápidas</strong></span>
-    </div>
-    <div>
-        💡 <strong>Tip:</strong> Sé específico en tus preguntas para obtener mejores respuestas<br>
-        <em>Powered by Streamlit & Sentence Transformers</em>
-    </div>
-</div>
-""", unsafe_allow_html=True)
