@@ -7,7 +7,7 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
-# --- 💡 Consejo Importante sobre tu BD ---
+# --- 💡 Consejo  sobre tu BD ---
 with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_respuesta' tenga un ID"):
     st.code("""
     -- Si aún no tienes la tabla, usa esto:
