@@ -5,3 +5,4 @@ fuzzywuzzy
 python-Levenshtein
 nltk
 sentence-transformers
+pandas
