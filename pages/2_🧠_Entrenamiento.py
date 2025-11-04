@@ -7,6 +7,7 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
+# --- 💡 Consejo Importante sobre tu BD ---
 with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_respuesta' tenga un ID"):
     st.code("""
     -- Si aún no tienes la tabla, usa esto:
@@ -21,7 +22,29 @@ with st.expander("🔑 ¡IMPORTANTE! Asegúrate que tu tabla 'preguntas_sin_resp
     -- ALTER TABLE preguntas_sin_respuesta ADD COLUMN fecha_registro TIMESTAMP WITH TIME ZONE DEFAULT NOW();
     """, language="sql")
 
-# --- Funciones a a a ---
+# --- 💡 Consejo 2: Tu tabla 'chatbot_conocimiento' ---
+with st.expander("🔑 ¡IMPORTANTE! Revisa tu tabla 'chatbot_conocimiento'"):
+    st.code("""
+    -- ¡Entendido! Veo que tu tabla 'chatbot_conocimiento' usa un 'id' de tipo TEXT (ej. 'R001', 'R002').
+    -- ¡Esto es perfectamente válido!
+    
+    -- El error 'null value in column "id"' sucedía porque el código anterior 
+    -- no estaba generando este ID de texto antes de insertarlo.
+    
+    -- He modificado el código para que genere automáticamente el siguiente
+    -- ID (ej. si el máximo es 'R019', generará 'R020').
+    
+    -- Tu estructura de tabla es correcta, asegúrate de que 'id' sea PRIMARY KEY:
+    CREATE TABLE IF NOT EXISTS chatbot_conocimiento (
+        id TEXT PRIMARY KEY,
+        pregunta TEXT,
+        respuesta TEXT,
+        palabras_clave TEXT
+    );
+    
+    """, language="sql")
+
+# --- Funciones de esta página ---
 
 def cargar_preguntas_pendientes():
     """Obtiene todas las preguntas de la tabla 'preguntas_sin_respuesta'."""
@@ -51,19 +74,36 @@ def agregar_a_conocimiento(pregunta, respuesta, palabras_clave):
     if conn is None: return False
     try:
         with conn.cursor() as cursor:
+            
+            # --- 💡 NUEVO: Generar el siguiente ID de TEXTO (ej. R020) ---
+            # Extrae la parte numérica del ID, la convierte a entero, y saca el máximo
+            cursor.execute("SELECT MAX(CAST(SUBSTRING(id FROM 2) AS INTEGER)) FROM chatbot_conocimiento WHERE id LIKE 'R%';")
+            max_id_num = cursor.fetchone()[0]
+            
+            if max_id_num is None:
+                # Si la tabla está vacía
+                next_id_num = 1
+            else:
+                next_id_num = max_id_num + 1
+            
+            # Formatea el nuevo ID a 3 dígitos (ej. R001, R020, R123)
+            new_id = f"R{next_id_num:03d}"
+            
+            # --- 💡 MODIFICADO: Insertar con el nuevo ID de texto ---
             sql = """
-            INSERT INTO chatbot_conocimiento (pregunta, respuesta, palabras_clave)
-            VALUES (%s, %s, %s)
+            INSERT INTO chatbot_conocimiento (id, pregunta, respuesta, palabras_clave)
+            VALUES (%s, %s, %s, %s)
             """
-            cursor.execute(sql, (pregunta, respuesta, palabras_clave))
+            cursor.execute(sql, (new_id, pregunta, respuesta, palabras_clave))
             conn.commit()
         return True
     except Exception as e:
-        # --- 💡 MEJORA: Detectar el error de 'id' nulo ---
-        if "violates not-null constraint" in str(e) and "\"id\"" in str(e):
+        # --- 💡 MEJORA: Detectar error de ID duplicado ---
+        if "duplicate key value violates unique constraint" in str(e):
+            st.error(f"Error de ID duplicado: Se intentó guardar con un ID ('{new_id}') que ya existe. Revisa la base de datos o intenta de nuevo.")
+        elif "violates not-null constraint" in str(e) and "\"id\"" in str(e):
             st.error(f"Error al guardar: La columna 'id' en tu tabla 'chatbot_conocimiento' no puede ser nula.")
-            st.warning("Esto usualmente significa que la columna 'id' no está configurada como 'SERIAL PRIMARY KEY'.")
-            st.info("Por favor, revisa el consejo '¡IMPORTANTE! Revisa tu tabla chatbot_conocimiento' aquí arriba para ver cómo solucionarlo.")
+            st.warning("El código intentó generar un ID pero algo falló.")
         else:
             st.error(f"Error al guardar en conocimiento: {e}")
         return False
@@ -199,5 +239,4 @@ else:
                 st.rerun()
             else:
                 st.error("No se pudo descartar la pregunta.")
-
 
