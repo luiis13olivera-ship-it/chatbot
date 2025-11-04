@@ -80,7 +80,6 @@ def registrar_pregunta_fallida(pregunta):
             conn.close()
 
 # --- 4. Lógica de Carga de Conocimiento (IA) ---
-@st.cache_resource
 def cargar_conocimiento_y_modelo():
     """Carga el modelo de ML y vectoriza el conocimiento de la BD."""
     faq_data = []
