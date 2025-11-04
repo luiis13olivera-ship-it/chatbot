@@ -7,7 +7,6 @@ st.set_page_config(layout="wide")
 st.title("🧠 Centro de Entrenamiento del Asistente")
 st.caption("Revisa las preguntas que el bot no entendió y añádelas a su base de conocimiento.")
 
-
 # --- Funciones de esta página ---
 
 def cargar_preguntas_pendientes():
@@ -57,12 +56,15 @@ def resolver_pregunta_pendiente(id_pregunta):
     if conn is None: return False
     try:
         with conn.cursor() as cursor:
+            # El ID se pasa aquí, nos aseguramos que sea un 'int'
             sql = "DELETE FROM preguntas_sin_respuesta WHERE id = %s"
             cursor.execute(sql, (id_pregunta,))
             conn.commit()
         return True
     except Exception as e:
         st.error(f"Error al eliminar pregunta pendiente: {e}")
+        # Imprimimos el error en la consola para más depuración
+        print(f"Error en resolver_pregunta_pendiente: {e}") 
         return False
     finally:
         if conn: conn.close()
@@ -100,77 +102,80 @@ else:
     )
 
     # Obtenemos la fila completa de la pregunta seleccionada
-    pregunta_seleccionada = df_pendientes[df_pendientes['id'] == selected_id].iloc[0]
-    
-    
-    # --- 2. Formulario de Acción ---
-    st.markdown(f"**Gestionando Pregunta ID: `{pregunta_seleccionada['id']}`**")
-    
-    # Formulario para agregar la respuesta
-    with st.form(key=f"form_entrenamiento_{pregunta_seleccionada['id']}"):
-        st.markdown(f"**Pregunta original del usuario:**")
-        st.info(f"*{pregunta_seleccionada['pregunta_usuario']}*")
+    # .any() es para evitar un error de pandas si no hay selección
+    if selected_id:
+        pregunta_seleccionada = df_pendientes[df_pendientes['id'] == selected_id].iloc[0]
         
-        st.markdown("**Completa la información para el bot:**")
         
-        pregunta_oficial = st.text_area(
-            "1. Pregunta (edita la original para que sea una buena 'pregunta oficial'):",
-            value=pregunta_seleccionada['pregunta_usuario']
-        )
+        # --- 2. Formulario de Acción ---
+        st.markdown(f"**Gestionando Pregunta ID: `{pregunta_seleccionada['id']}`**")
         
-        respuesta_nueva = st.text_area(
-            "2. Respuesta (la respuesta que el bot debe dar):",
-            placeholder="Escribe la respuesta completa aquí..."
-        )
-        
-        palabras_clave = st.text_input(
-            "3. Palabras Clave (opcional, separadas por ; ):",
-            placeholder="ej: motor;repuesto;toyota"
-        )
-        
-        # --- 3. Botones de Acción ---
-        col1, col2 = st.columns(2)
-        with col1:
-            submit_aprender = st.form_submit_button(
-                label="✅ Aprender y Resolver Pregunta", 
-                use_container_width=True,
-                type="primary"
-            )
-        with col2:
-            submit_descartar = st.form_submit_button(
-                label="❌ Descartar Pregunta (Eliminar)", 
-                use_container_width=True,
-                type="secondary"
-            )
-
-    # --- 4. Lógica de los Botones ---
-    if submit_aprender:
-        if not pregunta_oficial or not respuesta_nueva:
-            st.warning("Debes completar al menos la 'Pregunta' y la 'Respuesta' para entrenar.")
-        else:
-            # 1. Agregar a la base de conocimiento
-            if agregar_a_conocimiento(pregunta_oficial, respuesta_nueva, palabras_clave):
-                # 2. Eliminar de la lista de pendientes
-                if resolver_pregunta_pendiente(pregunta_seleccionada['id']):
-                    st.success("¡Éxito! El bot ha aprendido la nueva respuesta.")
-                    
-                    # 3. MUY IMPORTANTE: Limpiar la caché del modelo
-                    st.cache_resource.clear()
-                    
-                    # 4. Refrescar la página
-                    st.rerun()
-                else:
-                    st.error("Se guardó la respuesta, pero no se pudo eliminar la pregunta de 'pendientes'.")
-            else:
-                st.error("No se pudo guardar la nueva respuesta en la base de conocimiento.")
-
-    if submit_descartar:
-        # Simplemente eliminamos la pregunta de "pendientes"
-        if resolver_pregunta_pendiente(pregunta_seleccionada['id']):
-            st.success(f"Pregunta ID {pregunta_seleccionada['id']} descartada exitosamente.")
+        # Formulario para agregar la respuesta
+        with st.form(key=f"form_entrenamiento_{pregunta_seleccionada['id']}"):
+            st.markdown(f"**Pregunta original del usuario:**")
+            st.info(f"*{pregunta_seleccionada['pregunta_usuario']}*")
             
-            # No limpiamos caché de modelo, pero sí refrescamos la UI
-            st.rerun()
-        else:
-            st.error("No se pudo descartar la pregunta.")
+            st.markdown("**Completa la información para el bot:**")
+            
+            pregunta_oficial = st.text_area(
+                "1. Pregunta (edita la original para que sea una buena 'pregunta oficial'):",
+                value=pregunta_seleccionada['pregunta_usuario']
+            )
+            
+            respuesta_nueva = st.text_area(
+                "2. Respuesta (la respuesta que el bot debe dar):",
+                placeholder="Escribe la respuesta completa aquí..."
+            )
+            
+            palabras_clave = st.text_input(
+                "3. Palabras Clave (opcional, separadas por ; ):",
+                placeholder="ej: motor;repuesto;toyota"
+            )
+            
+            # --- 3. Botones de Acción ---
+            col1, col2 = st.columns(2)
+            with col1:
+                submit_aprender = st.form_submit_button(
+                    label="✅ Aprender y Resolver Pregunta", 
+                    use_container_width=True,
+                    type="primary"
+                )
+            with col2:
+                submit_descartar = st.form_submit_button(
+                    label="❌ Descartar Pregunta (Eliminar)", 
+                    use_container_width=True,
+                    type="secondary"
+                )
 
+        # --- 4. Lógica de los Botones ---
+        if submit_aprender:
+            if not pregunta_oficial or not respuesta_nueva:
+                st.warning("Debes completar al menos la 'Pregunta' y la 'Respuesta' para entrenar.")
+            else:
+                # 1. Agregar a la base de conocimiento
+                if agregar_a_conocimiento(pregunta_oficial, respuesta_nueva, palabras_clave):
+                    # 2. Eliminar de la lista de pendientes
+                    #    💡 AQUÍ ESTÁ EL ARREGLO: convertimos a int()
+                    if resolver_pregunta_pendiente(int(pregunta_seleccionada['id'])):
+                        st.success("¡Éxito! El bot ha aprendido la nueva respuesta.")
+                        
+                        # 3. MUY IMPORTANTE: Limpiar la caché del modelo
+                        st.cache_resource.clear()
+                        
+                        # 4. Refrescar la página
+                        st.rerun()
+                    else:
+                        st.error("Se guardó la respuesta, pero no se pudo eliminar la pregunta de 'pendientes'.")
+                else:
+                    st.error("No se pudo guardar la nueva respuesta en la base de conocimiento.")
+
+        if submit_descartar:
+            # Simplemente eliminamos la pregunta de "pendientes"
+            # 💡 AQUÍ ESTÁ EL ARREGLO: convertimos a int()
+            if resolver_pregunta_pendiente(int(pregunta_seleccionada['id'])):
+                st.success(f"Pregunta ID {pregunta_seleccionada['id']} descartada exitosamente.")
+                
+                # No limpiamos caché de modelo, pero sí refrescamos la UI
+                st.rerun()
+            else:
+                st.error("No se pudo descartar la pregunta.")
