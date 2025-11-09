@@ -132,9 +132,6 @@ def responder(pregunta_usuario, model, faq_data, question_vectors):
     """Genera una respuesta basada en la entrada del usuario."""
     texto_filtrado = limpiar_texto(pregunta_usuario)
 
-    if not texto_filtrado:
-        return "Disculpa, no detecté ninguna palabra clave."
-
     # 1. Búsqueda por palabra clave
     for item in faq_data:
         for palabra in item['palabras_clave']:
