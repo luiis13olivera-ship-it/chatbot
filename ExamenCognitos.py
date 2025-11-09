@@ -1,6 +1,110 @@
 import streamlit as st
 # Importamos las funciones clave desde utils.py
 from utils import cargar_conocimiento_y_modelo, responder
+import streamlit as st
+# Importamos las funciones clave desde utils.py
+from utils import cargar_conocimiento_y_modelo, responder
+
+# --- 🎨 CONFIGURACIÓN DE PÁGINA Y ESTILOS (NUEVO) ---
+st.set_page_config(layout="wide")
+
+# Inyectamos el CSS personalizado inspirado en index.html
+st.markdown("""
+    <style>
+        /* Variables de color extraídas de index.html */
+        :root {
+            --primary: #E4202B; /* Rojo Verese */
+            --primary-dark: #C61C26;
+            --sidebar: #1a1b26;
+            --chat-bg: #161722;
+            --card-bg: #1e1f2e;
+            --text-primary: #e0e6f0;
+            --text-secondary: #a0a6b8;
+            --border: #2a2b3c;
+            --success: #10B981;
+            --warning: #F59E0B;
+        }
+        
+        /* Fondo principal de la App */
+        [data-testid="stAppViewContainer"] {
+            background-color: var(--chat-bg);
+            color: var(--text-primary);
+        }
+        
+        /* Barra lateral */
+        [data-testid="stSidebar"] {
+            background-color: var(--sidebar);
+        }
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] span {
+            color: var(--text-primary);
+        }
+        
+        /* Contenedores de mensajes de chat */
+        [data-testid="stChatMessage"] {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+
+        /* Color del texto y cabeceras */
+        h1, h2, h3, h4, h5, h6, .stMarkdown, label {
+            color: var(--text-primary);
+        }
+        
+        /* Inputs y textareas */
+        .stTextInput > div > div > input,
+        .stTextArea > div > div > textarea,
+        .stSelectbox > div > div {
+            background-color: var(--card-bg) !important;
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 8px;
+        }
+        
+        /* Botones (general) */
+        .stButton > button {
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+
+        /* Botón Primario (rojo) */
+        .stButton > button[kind="primary"] {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+        }
+        .stButton > button[kind="primary"]:hover {
+            background-color: var(--primary-dark);
+            color: white;
+            border: none;
+        }
+
+        /* Botón Secundario (oscuro) */
+        .stButton > button[kind="secondary"] {
+            background-color: var(--card-bg);
+            color: var(--text-primary);
+        }
+        .stButton > button[kind="secondary"]:hover {
+            background-color: var(--border);
+            color: var(--text-primary);
+        }
+        
+        /* Éxito (verde) y Advertencia (amarillo) */
+        [data-testid="stSuccess"] {
+            background-color: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        [data-testid="stWarning"] {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+
+    </style>
+""", unsafe_allow_html=True)
+# --- FIN DE ESTILOS ---
+
 
 # --- 🎨 INTERFAZ GRÁFICA ---
 
@@ -63,3 +167,4 @@ if prompt := st.chat_input("Escribe tu consulta aquí..."):
     # Mostrar la respuesta del asistente
     with st.chat_message("assistant"):
         st.markdown(response)
+    st.session_state.messages.append({"role": "assistant", "content": response})
