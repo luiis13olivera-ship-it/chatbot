@@ -11,6 +11,9 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
+# --- 💡 SUGERENCIA: Definir el umbral como una constante ---
+UMBRAL_CONFIANZA_IA = 0.75 # Puedes ajustar este valor (ej. 0.7, 0.8)
+
 # --- Configuración de NLTK ---
 try:
     nltk.data.find('tokenizers/punkt')
@@ -66,9 +69,9 @@ def registrar_pregunta_fallida(pregunta):
         with conn.cursor() as cursor:
             # 💡 NOTA: Tu tabla 'preguntas_sin_respuesta' debería tener un ID
             # CREATE TABLE IF NOT EXISTS preguntas_sin_respuesta (
-            #     id SERIAL PRIMARY KEY,
-            #     pregunta_usuario TEXT NOT NULL,
-            #     fecha_creacion TIMESTAMP DEFAULT NOW()
+            #    id SERIAL PRIMARY KEY,
+            #    pregunta_usuario TEXT NOT NULL,
+            #    fecha_creacion TIMESTAMP DEFAULT NOW()
             # );
             sql_query = "INSERT INTO preguntas_sin_respuesta (pregunta_usuario) VALUES (%s)"
             cursor.execute(sql_query, (pregunta,))
@@ -80,6 +83,10 @@ def registrar_pregunta_fallida(pregunta):
             conn.close()
 
 # --- 4. Lógica de Carga de Conocimiento (IA) ---
+
+# --- 💡 CORRECCIÓN CRÍTICA: Añadir caché de recursos ---
+# Esto evita que el modelo de 700MB se recargue en cada interacción.
+@st.cache_resource
 def cargar_conocimiento_y_modelo():
     """Carga el modelo de ML y vectoriza el conocimiento de la BD."""
     faq_data = []
@@ -88,7 +95,8 @@ def cargar_conocimiento_y_modelo():
     
     try:
         # 1. Cargar el Modelo de ML
-        print("Cargando modelo de lenguaje...")
+        print("Cargando modelo de lenguaje (esto solo pasará una vez)...")
+        st.toast("Cargando modelo de IA...") # Feedback para el usuario
         model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
         print("Modelo cargado.")
 
@@ -101,7 +109,7 @@ def cargar_conocimiento_y_modelo():
         with conn.cursor() as cursor:
             cursor.execute("SELECT pregunta, palabras_clave, respuesta FROM chatbot_conocimiento")
             data_db = cursor.fetchall()
-        conn.close()
+        conn.close() # Cerramos la conexión, ya tenemos los datos.
 
         # 3. Procesar y "Vectorizar" las preguntas
         print("Vectorizando preguntas de la BD...")
@@ -117,6 +125,7 @@ def cargar_conocimiento_y_modelo():
                 'respuesta': row[2]
             })
 
+        # Codificamos en lote (más rápido)
         question_vectors = model.encode(preguntas_limpias)
         print(f"Conocimiento cargado y vectorizado: {len(faq_data)} preguntas.")
         
@@ -132,26 +141,33 @@ def responder(pregunta_usuario, model, faq_data, question_vectors):
     """Genera una respuesta basada en la entrada del usuario."""
     texto_filtrado = limpiar_texto(pregunta_usuario)
 
+    if not texto_filtrado:
+        return "Disculpa, no detecté ninguna palabra clave en tu pregunta."
+
     # 1. Búsqueda por palabra clave
     for item in faq_data:
         for palabra in item['palabras_clave']:
-            if palabra in texto_filtrado:
+            # Usamos 'in' para que 'freno' coincida con 'kit de freno'
+            if palabra in texto_filtrado.split(): # .split() para buscar palabras exactas
                 return item['respuesta']
 
     # 2. Búsqueda por ML (Similitud Semántica)
-    if model and question_vectors is not None:
+    if model and question_vectors is not None and len(question_vectors) > 0:
         user_vector = model.encode([texto_filtrado])
         similarities = cosine_similarity(user_vector, question_vectors)
         best_match_index = np.argmax(similarities)
         best_score = similarities[0][best_match_index]
         
-        # 3. Devolución con umbral
-        if best_score >= 0.65:  
+        # 3. Devolución con umbral (usando la constante)
+        if best_score >= UMBRAL_CONFIANZA_IA:  
             return faq_data[best_match_index]['respuesta']
         else:
             # Si la IA no está segura, registra la pregunta
             registrar_pregunta_fallida(pregunta_usuario)
             return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
-    else:
+    elif not model:
         return "Error: El modelo de IA no está cargado."
-
+    else:
+        # Esto pasará si la BD está vacía pero el modelo cargó
+        registrar_pregunta_fallida(pregunta_usuario)
+        return "Lo siento, no tengo información sobre eso en mi base de conocimiento. ¿Puedes preguntar de otra forma?"
