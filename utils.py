@@ -135,18 +135,35 @@ def cargar_conocimiento_y_modelo():
         return None, None, None
 
 # --- 5. Lógica de Respuesta (IA) ---
+dimport streamlit as st
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from utils import limpiar_texto, registrar_pregunta_fallida # Asegúrate de importar tus otras funciones
+
+# --- 💡 Definir el umbral como una constante ---
+UMBRAL_CONFIANZA_IA = 0.75 # Puedes ajustar este valor (ej. 0.7, 0.8)
+
+# ... (aquí irían tus otras funciones como limpiar_texto, get_db_connection, etc.) ...
+
+# --- 5. Lógica de Respuesta (IA) ---
 def responder(pregunta_usuario, model, faq_data, question_vectors):
     """Genera una respuesta basada en la entrada del usuario."""
     texto_filtrado = limpiar_texto(pregunta_usuario)
 
+    # --- 💡 CORRECCIÓN APLICADA AQUÍ ---
     if not texto_filtrado:
-        return "Disculpa, no detecté ninguna palabra clave en tu pregunta."
+        # Si el texto está vacío (ej: "como estas?"),
+        # ¡primero registra la pregunta!
+        registrar_pregunta_fallida(pregunta_usuario)
+        # Y luego responde que no entendió
+        return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
 
     # 1. Búsqueda por palabra clave
     for item in faq_data:
-        for palabra in item['palabras_clave']:
-            # Usamos 'in' para que 'freno' coincida con 'kit de freno'
-            if palabra in texto_filtrado.split(): # .split() para buscar palabras exactas
+        # Usamos .split() para evitar que 'hola' coincida con 'hoja'
+        palabras_filtradas = texto_filtrado.split()
+        for palabra_clave in item['palabras_clave']:
+            if palabra_clave in palabras_filtradas:
                 return item['respuesta']
 
     # 2. Búsqueda por ML (Similitud Semántica)
@@ -163,6 +180,7 @@ def responder(pregunta_usuario, model, faq_data, question_vectors):
             # Si la IA no está segura, registra la pregunta
             registrar_pregunta_fallida(pregunta_usuario)
             return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
+            
     elif not model:
         return "Error: El modelo de IA no está cargado."
     else:
