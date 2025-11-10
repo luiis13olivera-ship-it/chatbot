@@ -85,8 +85,6 @@ def registrar_pregunta_fallida(pregunta):
 # --- 4. Lógica de Carga de Conocimiento (IA) ---
 
 # --- 💡 CORRECCIÓN CRÍTICA: Añadir caché de recursos ---
-# Esto evita que el modelo de 700MB se recargue en cada interacción.
-@st.cache_resource
 def cargar_conocimiento_y_modelo():
     """Carga el modelo de ML y vectoriza el conocimiento de la BD."""
     faq_data = []
