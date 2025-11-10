@@ -134,16 +134,6 @@ def cargar_conocimiento_y_modelo():
         st.error(f"Error de conexión o carga de modelo: {e}")
         return None, None, None
 
-# --- 5. Lógica de Respuesta (IA) ---
-dimport streamlit as st
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
-from utils import limpiar_texto, registrar_pregunta_fallida # Asegúrate de importar tus otras funciones
-
-# --- 💡 Definir el umbral como una constante ---
-UMBRAL_CONFIANZA_IA = 0.75 # Puedes ajustar este valor (ej. 0.7, 0.8)
-
-# ... (aquí irían tus otras funciones como limpiar_texto, get_db_connection, etc.) ...
 
 # --- 5. Lógica de Respuesta (IA) ---
 def responder(pregunta_usuario, model, faq_data, question_vectors):
