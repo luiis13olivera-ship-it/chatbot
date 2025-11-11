@@ -139,73 +139,109 @@ def cargar_conocimiento_y_modelo():
 def buscar_productos(texto_filtrado):
     """
     Busca en la tabla 'productos' usando los términos del texto_filtrado.
-    Utiliza OR para ser más flexible en la búsqueda.
+    Versión corregida y optimizada.
     """
-    if not texto_filtrado or len(texto_filtrado) < 3:
+    if not texto_filtrado or len(texto_filtrado.strip()) < 3:
+        print("DEBUG: Texto de búsqueda muy corto o vacío")
         return []
 
     conn = get_db_connection()
     if conn is None:
+        print("DEBUG: No hay conexión a la BD")
         return []
 
-    # Se usa el texto limpio para buscar
-    terminos = texto_filtrado.split()
-    
-    # 1. Base SQL: La tabla es 'productos'
-    sql_base = "SELECT nombre, stock, precio FROM productos WHERE "
-    
-    condiciones = []
-    params = []
-    
-    for termino in terminos:
-        # Solo usamos términos que no sean stopwords o muy cortos
-        if len(termino) > 2: 
-            # 2. Condiciones: Buscamos el término en 'nombre' O 'categoria'
-            condiciones.append("(nombre ILIKE %s OR categoria ILIKE %s)")
-            params.extend([f"%{termino}%", f"%{termino}%"])
-
-    if not condiciones:
-        conn.close()
-        return []
-
-    # 3. CRÍTICO: Unimos las condiciones con OR (encuentra si coincide con CUALQUIER término)
-    sql_query = sql_base + " OR ".join(condiciones) + " ORDER BY stock DESC LIMIT 5" 
-    
-    resultados_formateados = []
     try:
-        with conn.cursor() as cursor:
-            # Imprimimos la consulta antes de ejecutar para depuración
-            print(f"DEBUG SQL QUERY: {sql_query}")
-            print(f"DEBUG SQL PARAMS: {params}")
+        # Limpiar y preparar términos de búsqueda
+        texto_filtrado = texto_filtrado.strip()
+        terminos = texto_filtrado.split()
+        
+        print(f"DEBUG: Términos de búsqueda: {terminos}")
+        
+        # Filtrar términos válidos (más de 2 caracteres y no stopwords)
+        terminos_validos = []
+        for termino in terminos:
+            if len(termino) > 2 and termino not in stop_words:
+                terminos_validos.append(termino)
+        
+        if not terminos_validos:
+            print("DEBUG: No hay términos válidos para buscar")
+            return []
 
-            cursor.execute(sql_query, tuple(params))
+        # Construir consulta SQL dinámica
+        condiciones = []
+        params = []
+        
+        for termino in terminos_validos:
+            # Buscar en múltiples columnas
+            condiciones.append("(nombre ILIKE %s OR categoria ILIKE %s OR descripcion ILIKE %s)")
+            params.extend([f"%{termino}%", f"%{termino}%", f"%{termino}%"])
+
+        # Construir consulta final
+        sql_base = """
+            SELECT nombre, stock, precio, categoria 
+            FROM productos 
+            WHERE {}
+            ORDER BY 
+                stock DESC,
+                CASE WHEN stock > 0 THEN 0 ELSE 1 END,
+                nombre ASC
+            LIMIT 8
+        """.format(" OR ".join(condiciones))
+
+        print(f"DEBUG SQL: {sql_base}")
+        print(f"DEBUG Parámetros: {params}")
+
+        # Ejecutar consulta
+        with conn.cursor() as cursor:
+            cursor.execute(sql_base, tuple(params))
             resultados_db = cursor.fetchall()
             
-            if resultados_db:
-                print(f"DEBUG: Se encontraron {len(resultados_db)} productos.")
-                # Construimos la lista de productos
-                for row in resultados_db:
-                    nombre_prod = row[0]
-                    stock_prod = row[1]
-                    precio_prod = row[2] 
-                    
-                    precio_str = f"S/ {precio_prod:.2f}" 
-                    
-                    if stock_prod > 0:
-                        resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Stock: {stock_prod})")
-                    else:
-                        resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Agotado)")
-            else:
-                print("DEBUG: La consulta SQL no devolvió productos.")
+            print(f"DEBUG: Encontrados {len(resultados_db)} productos")
+            
+            if not resultados_db:
+                return []
+
+            # Formatear resultados
+            resultados_formateados = []
+            for row in resultados_db:
+                nombre_prod = row[0]
+                stock_prod = row[1]
+                precio_prod = row[2] if row[2] is not None else 0
+                categoria_prod = row[3] if row[3] else "Sin categoría"
                 
+                # Formatear precio
+                if precio_prod > 0:
+                    precio_str = f"S/ {precio_prod:.2f}"
+                else:
+                    precio_str = "Consultar precio"
+                
+                # Determinar estado de stock
+                if stock_prod > 10:
+                    stock_str = f"Stock: {stock_prod} (Disponible)"
+                    icono = "✅"
+                elif stock_prod > 0:
+                    stock_str = f"Stock: {stock_prod} (Últimas unidades)"
+                    icono = "⚠️"
+                else:
+                    stock_str = "Agotado"
+                    icono = "❌"
+                
+                resultado_linea = f"{icono} **{nombre_prod}** - {precio_str} - {stock_str} - *{categoria_prod}*"
+                resultados_formateados.append(resultado_linea)
+
+            return resultados_formateados
+
     except Exception as e:
-        # Si hay un error, lo imprimimos en la terminal
-        print(f"FATAL ERROR al buscar productos en BD: {e}")
+        print(f"ERROR en buscar_productos: {str(e)}")
+        # Información adicional para debugging
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return []
+    
     finally:
         if conn:
             conn.close()
-            
-    return resultados_formateados
+            print("DEBUG: Conexión cerrada")
 
 # --- 5. Lógica de Respuesta (IA) ---
 def responder(pregunta_usuario, model, faq_data, question_vectors):
