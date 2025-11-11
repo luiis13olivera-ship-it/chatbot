@@ -135,10 +135,11 @@ def cargar_conocimiento_y_modelo():
         return None, None, None
 # --- 💡 NUEVA FUNCIÓN (CORREGIDA): Búsqueda de Productos en BD ---
 # --- 💡 NUEVA FUNCIÓN (OPTIMIZADA Y MÁS FLEXIBLE) ---
+# --- 💡 NUEVA FUNCIÓN (FINAL): Búsqueda de Productos en BD ---
 def buscar_productos(texto_filtrado):
     """
     Busca en la tabla 'productos' usando los términos del texto_filtrado.
-    Hemos cambiado el AND por OR para mayor flexibilidad de búsqueda.
+    Utiliza OR para ser más flexible en la búsqueda.
     """
     if not texto_filtrado or len(texto_filtrado) < 3:
         return []
@@ -147,36 +148,42 @@ def buscar_productos(texto_filtrado):
     if conn is None:
         return []
 
+    # Se usa el texto limpio para buscar
     terminos = texto_filtrado.split()
     
-    # 1. Consulta SQL: Seleccionamos nombre, stock y precio
+    # 1. Base SQL: La tabla es 'productos'
     sql_base = "SELECT nombre, stock, precio FROM productos WHERE "
     
     condiciones = []
     params = []
     
     for termino in terminos:
+        # Solo usamos términos que no sean stopwords o muy cortos
         if len(termino) > 2: 
-            # 2. Condiciones: Buscamos en nombre O categoria
-            #    Usamos LOWER(categoria) por si el nombre de la columna tiene mayúsculas internas
-            condiciones.append("(nombre ILIKE %s OR LOWER(categoria) ILIKE %s)")
+            # 2. Condiciones: Buscamos el término en 'nombre' O 'categoria'
+            condiciones.append("(nombre ILIKE %s OR categoria ILIKE %s)")
             params.extend([f"%{termino}%", f"%{termino}%"])
 
     if not condiciones:
         conn.close()
         return []
 
-    # 3. CAMBIO CRÍTICO: Usamos OR en lugar de AND para ser más flexibles
+    # 3. CRÍTICO: Unimos las condiciones con OR (encuentra si coincide con CUALQUIER término)
     sql_query = sql_base + " OR ".join(condiciones) + " ORDER BY stock DESC LIMIT 5" 
     
     resultados_formateados = []
     try:
         with conn.cursor() as cursor:
+            # Imprimimos la consulta antes de ejecutar para depuración
+            print(f"DEBUG SQL QUERY: {sql_query}")
+            print(f"DEBUG SQL PARAMS: {params}")
+
             cursor.execute(sql_query, tuple(params))
             resultados_db = cursor.fetchall()
             
             if resultados_db:
-                # Si encontramos productos, construimos la lista
+                print(f"DEBUG: Se encontraron {len(resultados_db)} productos.")
+                # Construimos la lista de productos
                 for row in resultados_db:
                     nombre_prod = row[0]
                     stock_prod = row[1]
@@ -188,13 +195,12 @@ def buscar_productos(texto_filtrado):
                         resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Stock: {stock_prod})")
                     else:
                         resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Agotado)")
-            
-            # --- 💡 PISTA DE DEPURACIÓN (Solo para tu terminal) ---
-            print(f"DEBUG SQL: Se ejecutó la consulta: {sql_query} con params: {params}. Resultados: {len(resultados_db)}")
-
+            else:
+                print("DEBUG: La consulta SQL no devolvió productos.")
+                
     except Exception as e:
-        # Esto imprimirá un error de tabla no encontrada o columna errónea en tu terminal
-        print(f"FATAL ERROR al buscar productos: {e}")
+        # Si hay un error, lo imprimimos en la terminal
+        print(f"FATAL ERROR al buscar productos en BD: {e}")
     finally:
         if conn:
             conn.close()
