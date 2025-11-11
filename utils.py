@@ -134,10 +134,11 @@ def cargar_conocimiento_y_modelo():
         st.error(f"Error de conexión o carga de modelo: {e}")
         return None, None, None
 # --- 💡 NUEVA FUNCIÓN (CORREGIDA): Búsqueda de Productos en BD ---
+# --- 💡 NUEVA FUNCIÓN (OPTIMIZADA Y MÁS FLEXIBLE) ---
 def buscar_productos(texto_filtrado):
     """
-    Busca en la tabla 'productos' usando los términos
-    del texto_filtrado, buscando en 'nombre' y 'categoria'.
+    Busca en la tabla 'productos' usando los términos del texto_filtrado.
+    Hemos cambiado el AND por OR para mayor flexibilidad de búsqueda.
     """
     if not texto_filtrado or len(texto_filtrado) < 3:
         return []
@@ -148,24 +149,25 @@ def buscar_productos(texto_filtrado):
 
     terminos = texto_filtrado.split()
     
-    # --- ⚠️ ¡CONSULTA AJUSTADA A TU TABLA! ---
-    # Buscamos en 'nombre' Y 'categoria', y traemos 'precio' y 'stock'
-    sql_base = "SELECT nombre, stock, precio FROM productos WHERE " # <-- CAMBIO: Añadido 'precio'
+    # 1. Consulta SQL: Seleccionamos nombre, stock y precio
+    sql_base = "SELECT nombre, stock, precio FROM productos WHERE "
     
     condiciones = []
     params = []
     
     for termino in terminos:
         if len(termino) > 2: 
-            # --- CAMBIO: Buscamos en 'nombre' o 'categoria', NO en 'descripcion'
-            condiciones.append("(nombre ILIKE %s OR categoria ILIKE %s)")
+            # 2. Condiciones: Buscamos en nombre O categoria
+            #    Usamos LOWER(categoria) por si el nombre de la columna tiene mayúsculas internas
+            condiciones.append("(nombre ILIKE %s OR LOWER(categoria) ILIKE %s)")
             params.extend([f"%{termino}%", f"%{termino}%"])
 
     if not condiciones:
         conn.close()
         return []
 
-    sql_query = sql_base + " AND ".join(condiciones) + " ORDER BY stock DESC LIMIT 5"
+    # 3. CAMBIO CRÍTICO: Usamos OR en lugar de AND para ser más flexibles
+    sql_query = sql_base + " OR ".join(condiciones) + " ORDER BY stock DESC LIMIT 5" 
     
     resultados_formateados = []
     try:
@@ -174,21 +176,25 @@ def buscar_productos(texto_filtrado):
             resultados_db = cursor.fetchall()
             
             if resultados_db:
+                # Si encontramos productos, construimos la lista
                 for row in resultados_db:
                     nombre_prod = row[0]
                     stock_prod = row[1]
-                    precio_prod = row[2] # <-- CAMBIO: Obtenemos el precio
+                    precio_prod = row[2] 
                     
-                    # Formateamos el precio (asumiendo Soles "S/")
                     precio_str = f"S/ {precio_prod:.2f}" 
                     
-                    # --- CAMBIO: Mostramos el precio en la respuesta ---
                     if stock_prod > 0:
                         resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Stock: {stock_prod})")
                     else:
                         resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Agotado)")
+            
+            # --- 💡 PISTA DE DEPURACIÓN (Solo para tu terminal) ---
+            print(f"DEBUG SQL: Se ejecutó la consulta: {sql_query} con params: {params}. Resultados: {len(resultados_db)}")
+
     except Exception as e:
-        print(f"Error al buscar productos: {e}")
+        # Esto imprimirá un error de tabla no encontrada o columna errónea en tu terminal
+        print(f"FATAL ERROR al buscar productos: {e}")
     finally:
         if conn:
             conn.close()
