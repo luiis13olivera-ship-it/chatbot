@@ -133,12 +133,12 @@ def cargar_conocimiento_y_modelo():
         print(f"Error fatal al cargar el conocimiento: {e}")
         st.error(f"Error de conexión o carga de modelo: {e}")
         return None, None, None
+# --- 💡 NUEVA FUNCIÓN (CORREGIDA): Búsqueda de Productos en BD ---
 def buscar_productos(texto_filtrado):
     """
     Busca en la tabla 'productos' usando los términos
-    del texto_filtrado.
+    del texto_filtrado, buscando en 'nombre' y 'categoria'.
     """
-    # Si el texto está vacío o es muy corto, no busques
     if not texto_filtrado or len(texto_filtrado) < 3:
         return []
 
@@ -146,33 +146,26 @@ def buscar_productos(texto_filtrado):
     if conn is None:
         return []
 
-    # Separa el texto en términos de búsqueda
-    # Ej: "filtro aceite toyota" -> ["filtro", "aceite", "toyota"]
     terminos = texto_filtrado.split()
     
-    # --- ⚠️ ¡Ajusta esta consulta a tu tabla! ---
-    # Asumimos una tabla 'productos' con 'nombre', 'descripcion' y 'stock'
-    sql_base = "SELECT nombre, stock FROM productos WHERE "
+    # --- ⚠️ ¡CONSULTA AJUSTADA A TU TABLA! ---
+    # Buscamos en 'nombre' Y 'categoria', y traemos 'precio' y 'stock'
+    sql_base = "SELECT nombre, stock, precio FROM productos WHERE " # <-- CAMBIO: Añadido 'precio'
     
-    # Creamos una condición ILIKE por cada término
-    # Ej: (nombre ILIKE '%filtro%' OR descripcion ILIKE '%filtro%')
-    #     AND (nombre ILIKE '%aceite%' OR descripcion ILIKE '%aceite%')
     condiciones = []
     params = []
     
     for termino in terminos:
-        if len(termino) > 2: # Ignorar palabras muy cortas (ej. "de", "a")
-            condiciones.append("(nombre ILIKE %s OR descripcion ILIKE %s)")
+        if len(termino) > 2: 
+            # --- CAMBIO: Buscamos en 'nombre' o 'categoria', NO en 'descripcion'
+            condiciones.append("(nombre ILIKE %s OR categoria ILIKE %s)")
             params.extend([f"%{termino}%", f"%{termino}%"])
 
-    # Si no hay términos válidos, salimos
     if not condiciones:
         conn.close()
         return []
 
-    # Unimos todas las condiciones con "AND"
     sql_query = sql_base + " AND ".join(condiciones) + " ORDER BY stock DESC LIMIT 5"
-    # (Limitamos a 5 para no saturar el chat)
     
     resultados_formateados = []
     try:
@@ -180,19 +173,21 @@ def buscar_productos(texto_filtrado):
             cursor.execute(sql_query, tuple(params))
             resultados_db = cursor.fetchall()
             
-            # Formateamos la respuesta
             if resultados_db:
                 for row in resultados_db:
                     nombre_prod = row[0]
                     stock_prod = row[1]
-                    # Mostramos el stock
+                    precio_prod = row[2] # <-- CAMBIO: Obtenemos el precio
+                    
+                    # Formateamos el precio (asumiendo Soles "S/")
+                    precio_str = f"S/ {precio_prod:.2f}" 
+                    
+                    # --- CAMBIO: Mostramos el precio en la respuesta ---
                     if stock_prod > 0:
-                        resultados_formateados.append(f"  • {nombre_prod} (Stock: {stock_prod})")
+                        resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Stock: {stock_prod})")
                     else:
-                        resultados_formateados.append(f"  • {nombre_prod} (Agotado)")
+                        resultados_formateados.append(f"  • {nombre_prod} ({precio_str} - Agotado)")
     except Exception as e:
-        # Si la tabla 'productos' no existe, esto fallará.
-        # Lo imprimimos en la consola pero no molestamos al usuario.
         print(f"Error al buscar productos: {e}")
     finally:
         if conn:
