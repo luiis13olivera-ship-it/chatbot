@@ -133,47 +133,138 @@ def cargar_conocimiento_y_modelo():
         print(f"Error fatal al cargar el conocimiento: {e}")
         st.error(f"Error de conexión o carga de modelo: {e}")
         return None, None, None
+def buscar_productos(texto_filtrado):
+    """
+    Busca en la tabla 'productos' usando los términos
+    del texto_filtrado.
+    """
+    # Si el texto está vacío o es muy corto, no busques
+    if not texto_filtrado or len(texto_filtrado) < 3:
+        return []
 
+    conn = get_db_connection()
+    if conn is None:
+        return []
+
+    # Separa el texto en términos de búsqueda
+    # Ej: "filtro aceite toyota" -> ["filtro", "aceite", "toyota"]
+    terminos = texto_filtrado.split()
+    
+    # --- ⚠️ ¡Ajusta esta consulta a tu tabla! ---
+    # Asumimos una tabla 'productos' con 'nombre', 'descripcion' y 'stock'
+    sql_base = "SELECT nombre, stock FROM productos WHERE "
+    
+    # Creamos una condición ILIKE por cada término
+    # Ej: (nombre ILIKE '%filtro%' OR descripcion ILIKE '%filtro%')
+    #     AND (nombre ILIKE '%aceite%' OR descripcion ILIKE '%aceite%')
+    condiciones = []
+    params = []
+    
+    for termino in terminos:
+        if len(termino) > 2: # Ignorar palabras muy cortas (ej. "de", "a")
+            condiciones.append("(nombre ILIKE %s OR descripcion ILIKE %s)")
+            params.extend([f"%{termino}%", f"%{termino}%"])
+
+    # Si no hay términos válidos, salimos
+    if not condiciones:
+        conn.close()
+        return []
+
+    # Unimos todas las condiciones con "AND"
+    sql_query = sql_base + " AND ".join(condiciones) + " ORDER BY stock DESC LIMIT 5"
+    # (Limitamos a 5 para no saturar el chat)
+    
+    resultados_formateados = []
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(sql_query, tuple(params))
+            resultados_db = cursor.fetchall()
+            
+            # Formateamos la respuesta
+            if resultados_db:
+                for row in resultados_db:
+                    nombre_prod = row[0]
+                    stock_prod = row[1]
+                    # Mostramos el stock
+                    if stock_prod > 0:
+                        resultados_formateados.append(f"  • {nombre_prod} (Stock: {stock_prod})")
+                    else:
+                        resultados_formateados.append(f"  • {nombre_prod} (Agotado)")
+    except Exception as e:
+        # Si la tabla 'productos' no existe, esto fallará.
+        # Lo imprimimos en la consola pero no molestamos al usuario.
+        print(f"Error al buscar productos: {e}")
+    finally:
+        if conn:
+            conn.close()
+            
+    return resultados_formateados
 
 # --- 5. Lógica de Respuesta (IA) ---
 def responder(pregunta_usuario, model, faq_data, question_vectors):
     """Genera una respuesta basada en la entrada del usuario."""
     texto_filtrado = limpiar_texto(pregunta_usuario)
 
-    # --- 💡 CORRECCIÓN APLICADA AQUÍ ---
     if not texto_filtrado:
-        # Si el texto está vacío (ej: "como estas?"),
-        # ¡primero registra la pregunta!
         registrar_pregunta_fallida(pregunta_usuario)
-        # Y luego responde que no entendió
         return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
 
-    # 1. Búsqueda por palabra clave
+    # --- 1. Búsqueda por palabra clave (igual que antes) ---
     for item in faq_data:
-        # Usamos .split() para evitar que 'hola' coincida con 'hoja'
         palabras_filtradas = texto_filtrado.split()
         for palabra_clave in item['palabras_clave']:
             if palabra_clave in palabras_filtradas:
                 return item['respuesta']
 
-    # 2. Búsqueda por ML (Similitud Semántica)
+    # --- 💡 NUEVO: Búsqueda dinámica de productos ---
+    # Buscamos productos *antes* de decidir si la IA falló
+    resultados_productos = buscar_productos(texto_filtrado)
+
+
+    # --- 2. Búsqueda por ML (Similitud Semántica) ---
+    respuesta_ia = None
     if model and question_vectors is not None and len(question_vectors) > 0:
         user_vector = model.encode([texto_filtrado])
         similarities = cosine_similarity(user_vector, question_vectors)
         best_match_index = np.argmax(similarities)
         best_score = similarities[0][best_match_index]
         
-        # 3. Devolución con umbral (usando la constante)
         if best_score >= UMBRAL_CONFIANZA_IA:  
-            return faq_data[best_match_index]['respuesta']
-        else:
-            # Si la IA no está segura, registra la pregunta
-            registrar_pregunta_fallida(pregunta_usuario)
-            return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
+            respuesta_ia = faq_data[best_match_index]['respuesta']
             
     elif not model:
         return "Error: El modelo de IA no está cargado."
+    # (Si el modelo está cargado pero la BD de IA está vacía, se maneja abajo)
+
+
+    # --- 3. 💡 NUEVA LÓGICA DE COMBINACIÓN ---
+
+    # Caso 1: La IA encontró una respuesta Y encontramos productos
+    if respuesta_ia and resultados_productos:
+        respuesta_final = (
+            f"{respuesta_ia}\n\n"
+            "Además, he encontrado estos productos relacionados en nuestro inventario:\n"
+            + "\n".join(resultados_productos)
+        )
+        return respuesta_final
+
+    # Caso 2: La IA encontró una respuesta, pero NO hay productos
+    elif respuesta_ia:
+        return respuesta_ia # Comportamiento original
+
+    # Caso 3: La IA NO encontró respuesta, PERO SÍ encontramos productos
+    elif not respuesta_ia and resultados_productos:
+        respuesta_final = (
+            "No he encontrado una respuesta exacta a tu pregunta, "
+            "pero sí encontré estos productos que podrían interesarte:\n"
+            + "\n".join(resultados_productos)
+        )
+        return respuesta_final
+
+    # Caso 4: Ni la IA entendió, ni encontramos productos (Fallo total)
     else:
-        # Esto pasará si la BD está vacía pero el modelo cargó
         registrar_pregunta_fallida(pregunta_usuario)
-        return "Lo siento, no tengo información sobre eso en mi base de conocimiento. ¿Puedes preguntar de otra forma?"
+        if not faq_data: # Si la BD de conocimiento está vacía
+             return "Lo siento, no tengo información sobre eso en mi base de conocimiento. ¿Puedes preguntar de otra forma?"
+        else: # Si la IA simplemente no tuvo confianza
+             return "Lo siento, no estoy seguro de entender tu pregunta. 😅 ¿Podrías reformularla?"
